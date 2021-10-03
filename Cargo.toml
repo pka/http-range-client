@@ -1,0 +1,16 @@
+[package]
+name = "http-range-client"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+byteorder = "1.4.2"
+# Minimal dependencices without SSL support.
+reqwest = { version = "0.11.0", default-features = false }
+bytes = { version = "1.0.1" }
+thiserror = "1.0"
+log = "0.4.13"
+
+[dev-dependencies]
+# One test needs SSL support; just use the default system bindings for that.
+reqwest = { version = "0.11.0", default-features = true }
