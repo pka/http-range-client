@@ -1,20 +1,28 @@
-use crate::error::{HttpError, Result};
+use crate::error::Result;
+use crate::HttpClient;
+use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::cmp::max;
 use std::str;
 
+#[async_trait]
+pub trait HttpRangeClient {
+    fn new() -> Self;
+    async fn get_range(&self, url: &str, range: &str) -> Result<Bytes>;
+}
+
 /// HTTP client for HTTP Range requests (https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests)
-struct HttpRangeClient {
-    client: reqwest::Client,
+pub(crate) struct GenericHttpRangeClient<T: HttpRangeClient> {
+    client: T,
     url: String,
     requests_ever_made: usize,
     bytes_ever_requested: usize,
 }
 
-impl HttpRangeClient {
+impl<T: HttpRangeClient> GenericHttpRangeClient<T> {
     fn new(url: &str) -> Self {
-        HttpRangeClient {
-            client: reqwest::Client::new(),
+        GenericHttpRangeClient {
+            client: T::new(),
             url: url.to_string(),
             requests_ever_made: 0,
             bytes_ever_requested: 0,
@@ -28,26 +36,13 @@ impl HttpRangeClient {
             "request: #{}, bytes: (this_request: {}, ever: {}), Range: {}",
             self.requests_ever_made, length, self.bytes_ever_requested, range
         );
-        let response = self
-            .client
-            .get(&self.url)
-            .header("Range", range)
-            .send()
-            .await
-            .map_err(|e| HttpError::HttpError(e.to_string()))?;
-        if !response.status().is_success() {
-            return Err(HttpError::HttpStatus(response.status().as_u16()));
-        }
-        response
-            .bytes()
-            .await
-            .map_err(|e| HttpError::HttpError(e.to_string()))
+        self.client.get_range(&self.url, &range).await
     }
 }
 
 /// HTTP client for HTTP Range requests with a buffer optimized for sequential requests
 pub struct BufferedHttpRangeClient {
-    http_client: HttpRangeClient,
+    http_client: HttpClient,
     buf: BytesMut,
     /// Lower index of buffer relative to input stream
     head: usize,
@@ -56,7 +51,7 @@ pub struct BufferedHttpRangeClient {
 impl BufferedHttpRangeClient {
     pub fn new(url: &str) -> Self {
         BufferedHttpRangeClient {
-            http_client: HttpRangeClient::new(url),
+            http_client: HttpClient::new(url),
             buf: BytesMut::new(),
             head: 0,
         }
