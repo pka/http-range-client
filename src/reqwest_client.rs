@@ -1,5 +1,5 @@
 use crate::error::{HttpError, Result};
-use crate::http_client::{GenericHttpRangeClient, HttpRangeClient};
+use crate::range_client::{GenericHttpRangeClient, HttpRangeClient};
 use async_trait::async_trait;
 use bytes::Bytes;
 
