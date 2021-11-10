@@ -21,6 +21,9 @@ impl BufferedHttpRangeClient {
         }
     }
 
+    /// Get `length` bytes with offset `begin`.
+    ///
+    /// When not already in buffer, request at least `min_req_size` bytes.
     pub async fn get_range(
         &mut self,
         begin: usize,
@@ -68,7 +71,6 @@ impl BufferedHttpRangeClient {
         self.head + self.buf.len()
     }
 }
-
 
 #[cfg(test)]
 mod test {

@@ -22,5 +22,5 @@ mod range_client;
 mod reqwest_client;
 
 pub use buffered_range_client::BufferedHttpRangeClient;
-pub use error::Result;
+pub use error::*;
 pub(crate) use reqwest_client::HttpClient;
