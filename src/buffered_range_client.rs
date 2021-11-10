@@ -68,3 +68,18 @@ impl BufferedHttpRangeClient {
         self.head + self.buf.len()
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    use crate::{BufferedHttpRangeClient, Result};
+
+    #[tokio::test]
+    async fn http_read_async() -> Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.get_range(0, 3, 256).await?;
+        assert_eq!(bytes, "fgb".as_bytes());
+        Ok(())
+    }
+}
