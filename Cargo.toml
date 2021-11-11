@@ -10,11 +10,13 @@ readme = "README.md"
 license = "MIT/Apache-2.0"
 keywords = ["http", "reader", "buffer"]
 
+[features]
+default = ["reqwest"]
 
 [dependencies]
 byteorder = "1.4.2"
 # Minimal dependencices without SSL support.
-reqwest = { version = "0.11.0", default-features = false }
+reqwest = { version = "0.11.0", default-features = false, optional = true }
 bytes = { version = "1.0.1" }
 thiserror = "1.0"
 log = "0.4.13"
