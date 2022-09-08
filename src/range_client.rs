@@ -3,7 +3,15 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::str;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+pub(crate) trait HttpRangeClient {
+    fn new() -> Self;
+    async fn get_range(&self, url: &str, range: &str) -> Result<Bytes>;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 pub(crate) trait HttpRangeClient {
     fn new() -> Self;
     async fn get_range(&self, url: &str, range: &str) -> Result<Bytes>;
