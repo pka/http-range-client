@@ -15,14 +15,11 @@ default = ["reqwest"]
 
 [dependencies]
 byteorder = "1.4.2"
-# Minimal dependencices without SSL support.
-reqwest = { version = "0.11.0", default-features = false, optional = true }
+reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
 bytes = { version = "1.0.1" }
 thiserror = "1.0"
 log = "0.4.13"
 async-trait = "0.1.51"
 
 [dev-dependencies]
-# One test needs SSL support; just use the default system bindings for that.
-reqwest = { version = "0.11.0", default-features = true }
 tokio = { version = "1.0.2", default-features = false, features = ["rt-multi-thread", "macros"] }
