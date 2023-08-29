@@ -21,15 +21,12 @@ impl BufferedHttpRangeClient {
         }
     }
 
-    /// Get `length` bytes with offset `begin`.
-    ///
-    /// When not already in buffer, request at least `min_req_size` bytes.
-    pub async fn get_range(
+    fn get_request_range(
         &mut self,
         begin: usize,
         length: usize,
         min_req_size: usize,
-    ) -> Result<&[u8]> {
+    ) -> Option<(usize, usize)> {
         //
         //            head  begin    tail
         //       +------+-----+---+---+------------+
@@ -55,20 +52,37 @@ impl BufferedHttpRangeClient {
             // Read additional bytes into buffer
             let range_begin = max(begin, self.tail());
             let range_length = max(begin + length - range_begin, min_req_size);
+            Some((range_begin, range_length))
+        } else {
+            None
+        }
+    }
+
+    fn tail(&self) -> usize {
+        self.head + self.buf.len()
+    }
+
+    /// Get `length` bytes with offset `begin`.
+    ///
+    /// When not already in buffer, request at least `min_req_size` bytes.
+    pub async fn get_range(
+        &mut self,
+        begin: usize,
+        length: usize,
+        min_req_size: usize,
+    ) -> Result<&[u8]> {
+        if let Some((range_begin, range_length)) =
+            self.get_request_range(begin, length, min_req_size)
+        {
             let bytes = self
                 .http_client
                 .get_range(range_begin, range_length)
                 .await?;
             self.buf.put(bytes);
         }
-
         // Return slice from buffer
         let lower = begin - self.head;
         Ok(&self.buf[lower..lower + length])
-    }
-
-    fn tail(&self) -> usize {
-        self.head + self.buf.len()
     }
 }
 
