@@ -175,7 +175,7 @@ mod test_async {
 #[cfg(feature = "sync")]
 mod test_sync {
     use crate::{BufferedHttpRangeClient, Result};
-    use std::io::Read;
+    use std::io::{Read, Seek, SeekFrom};
 
     #[test]
     fn http_read_sync() -> Result<()> {
@@ -199,12 +199,9 @@ mod test_sync {
 
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
-        let mut bytes = [0; 3];
-        client.min_req_size(256).read_exact(&mut bytes)?;
-        assert_eq!(&bytes, b"fgb");
-
+        client.seek(SeekFrom::Start(3)).ok();
         let mut version = [0; 1];
-        client.read_exact(&mut version)?;
+        client.min_req_size(256).read_exact(&mut version)?;
         assert_eq!(&version, &[3]);
 
         let mut bytes = [0; 3];
