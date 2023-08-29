@@ -1,9 +1,11 @@
 use crate::error::Result;
+#[cfg(not(feature = "sync"))]
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::str;
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(feature = "sync"))]
 #[async_trait]
 pub(crate) trait HttpRangeClient {
     fn new() -> Self;
@@ -11,10 +13,17 @@ pub(crate) trait HttpRangeClient {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[cfg(not(feature = "sync"))]
 #[async_trait(?Send)]
 pub(crate) trait HttpRangeClient {
     fn new() -> Self;
     async fn get_range(&self, url: &str, range: &str) -> Result<Bytes>;
+}
+
+#[cfg(feature = "sync")]
+pub(crate) trait HttpRangeClient {
+    fn new() -> Self;
+    fn get_range(&self, url: &str, range: &str) -> Result<Bytes>;
 }
 
 /// HTTP client for HTTP Range requests (https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests)
@@ -49,9 +58,19 @@ impl<T: HttpRangeClient> GenericHttpRangeClient<T> {
             stats: RequestStats::default(),
         }
     }
-    pub async fn get_range(&mut self, begin: usize, length: usize) -> Result<Bytes> {
+    fn get_range_header(&mut self, begin: usize, length: usize) -> String {
         let range = format!("bytes={}-{}", begin, begin + length - 1);
         self.stats.log_get_range(begin, length, &range);
+        range
+    }
+    #[cfg(not(feature = "sync"))]
+    pub async fn get_range(&mut self, begin: usize, length: usize) -> Result<Bytes> {
+        let range = self.get_range_header(begin, length);
         self.client.get_range(&self.url, &range).await
+    }
+    #[cfg(feature = "sync")]
+    pub fn get_range(&mut self, begin: usize, length: usize) -> Result<Bytes> {
+        let range = self.get_range_header(begin, length);
+        self.client.get_range(&self.url, &range)
     }
 }

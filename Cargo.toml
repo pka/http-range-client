@@ -12,6 +12,7 @@ keywords = ["http", "reader", "buffer"]
 
 [features]
 default = ["reqwest"]
+sync = ["reqwest?/blocking"]
 
 [dependencies]
 byteorder = "1.4.2"

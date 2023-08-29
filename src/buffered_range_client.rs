@@ -65,6 +65,7 @@ impl BufferedHttpRangeClient {
     /// Get `length` bytes with offset `begin`.
     ///
     /// When not already in buffer, request at least `min_req_size` bytes.
+    #[cfg(not(feature = "sync"))]
     pub async fn get_range(
         &mut self,
         begin: usize,
@@ -84,17 +85,44 @@ impl BufferedHttpRangeClient {
         let lower = begin - self.head;
         Ok(&self.buf[lower..lower + length])
     }
+
+    /// Get `length` bytes with offset `begin`.
+    ///
+    /// When not already in buffer, request at least `min_req_size` bytes.
+    #[cfg(feature = "sync")]
+    pub fn get_range(&mut self, begin: usize, length: usize, min_req_size: usize) -> Result<&[u8]> {
+        if let Some((range_begin, range_length)) =
+            self.get_request_range(begin, length, min_req_size)
+        {
+            let bytes = self.http_client.get_range(range_begin, range_length)?;
+            self.buf.put(bytes);
+        }
+        // Return slice from buffer
+        let lower = begin - self.head;
+        Ok(&self.buf[lower..lower + length])
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{BufferedHttpRangeClient, Result};
 
+    #[cfg(not(feature = "sync"))]
     #[tokio::test]
     async fn http_read_async() -> Result<()> {
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.get_range(0, 3, 256).await?;
+        assert_eq!(bytes, "fgb".as_bytes());
+        Ok(())
+    }
+
+    #[cfg(feature = "sync")]
+    #[test]
+    fn http_read_sync() -> Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.get_range(0, 3, 256)?;
         assert_eq!(bytes, "fgb".as_bytes());
         Ok(())
     }
