@@ -9,8 +9,10 @@
 //! # #[cfg(not(feature = "sync"))]
 //! # async fn get() -> Result<()> {
 //! let mut client = BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
-//! let bytes = client.get_range(0, 3, 256).await?;
+//! let bytes = client.min_req_size(256).get_range(0, 3).await?;
 //! assert_eq!(bytes, "fgb".as_bytes());
+//! let version = client.get_bytes(1).await?; // From buffer - no HTTP request!
+//! assert_eq!(version, &[3]);
 //! # Ok(())
 //! # }
 //!
@@ -18,8 +20,24 @@
 //! # #[cfg(feature = "sync")]
 //! # fn get() -> Result<()> {
 //! let mut client = BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
-//! let bytes = client.get_range(0, 3, 256)?;
+//! let bytes = client.min_req_size(256).get_range(0, 3)?;
 //! assert_eq!(bytes, "fgb".as_bytes());
+//! let version = client.get_bytes(1)?; // From buffer - no HTTP request!
+//! assert_eq!(version, &[3]);
+//! # Ok(())
+//! # }
+//!
+//! // Seek+Read API (with feature `sync`):
+//! # #[cfg(feature = "sync")]
+//! # fn read() -> std::io::Result<()> {
+//! use std::io::Read;
+//! let mut client = BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+//! let mut bytes = [0; 3];
+//! client.min_req_size(256).read_exact(&mut bytes)?;
+//! assert_eq!(&bytes, b"fgb");
+//! let mut version = [0; 1];
+//! client.read_exact(&mut version)?;
+//! assert_eq!(&version, &[3]);
 //! # Ok(())
 //! # }
 //! ```
