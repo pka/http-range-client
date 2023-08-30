@@ -1,12 +1,10 @@
 use crate::error::Result;
-use crate::HttpClient;
 use bytes::{BufMut, BytesMut};
 use std::cmp::{max, min};
 use std::str;
 
-/// HTTP client for HTTP Range requests with a buffer optimized for sequential requests
-pub struct BufferedHttpRangeClient {
-    http_client: HttpClient,
+/// Buffer for Range request reader (https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests)
+struct HttpRangeBuffer {
     buf: BytesMut,
     min_req_size: usize,
     /// Current position for Read+Seek implementation
@@ -15,26 +13,14 @@ pub struct BufferedHttpRangeClient {
     head: usize,
 }
 
-impl BufferedHttpRangeClient {
-    pub fn new(url: &str) -> Self {
-        BufferedHttpRangeClient {
-            http_client: HttpClient::new(url),
+impl HttpRangeBuffer {
+    pub fn new() -> Self {
+        HttpRangeBuffer {
             buf: BytesMut::new(),
             min_req_size: 1024,
             offset: 0,
             head: 0,
         }
-    }
-
-    /// Set minimal request size.
-    pub fn set_min_req_size(&mut self, size: usize) {
-        self.min_req_size = size;
-    }
-
-    /// Set minimal request size.
-    pub fn min_req_size(&mut self, size: usize) -> &mut Self {
-        self.set_min_req_size(size);
-        self
     }
 
     fn tail(&self) -> usize {
@@ -53,7 +39,7 @@ impl BufferedHttpRangeClient {
         //                    +---+
         //                    length
 
-        #[cfg(feature = "log")]
+        #[cfg(feature = "logging")]
         log::trace!("read begin: {begin}, Length: {length}");
         // Download additional bytes if requested range is not in buffer
         if begin + length > self.tail() || begin < self.head {
@@ -76,73 +62,170 @@ impl BufferedHttpRangeClient {
     }
 }
 
-#[cfg(not(feature = "sync"))]
-mod nonblocking {
+pub(crate) mod nonblocking {
     use super::*;
+    use crate::range_client::AsyncHttpRangeClient;
 
-    impl BufferedHttpRangeClient {
+    /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential requests
+    pub struct AsyncBufferedHttpRangeClient<T: AsyncHttpRangeClient> {
+        http_client: T,
+        url: String,
+        buffer: HttpRangeBuffer,
+        #[cfg(feature = "logging")]
+        stats: stats::RequestStats,
+    }
+
+    impl<T: AsyncHttpRangeClient> AsyncBufferedHttpRangeClient<T> {
+        pub fn with(http_client: T, url: &str) -> AsyncBufferedHttpRangeClient<T> {
+            AsyncBufferedHttpRangeClient {
+                http_client,
+                url: url.to_string(),
+                buffer: HttpRangeBuffer::new(),
+                #[cfg(feature = "logging")]
+                stats: stats::RequestStats::default(),
+            }
+        }
+
+        /// Set minimal request size.
+        pub fn set_min_req_size(&mut self, size: usize) {
+            self.buffer.min_req_size = size;
+        }
+
+        /// Set minimal request size.
+        pub fn min_req_size(&mut self, size: usize) -> &mut Self {
+            self.set_min_req_size(size);
+            self
+        }
+
+        fn range(&mut self, begin: usize, length: usize) -> String {
+            let range = format!("bytes={begin}-{}", begin + length - 1);
+            #[cfg(feature = "logging")]
+            self.stats.log_get_range(begin, length, &range);
+            range
+        }
+
         /// Get `length` bytes with offset `begin`.
         pub async fn get_range(&mut self, begin: usize, length: usize) -> Result<&[u8]> {
-            let slice_len =
-                if let Some((range_begin, range_length)) = self.get_request_range(begin, length) {
-                    let bytes = self
-                        .http_client
-                        .get_range(range_begin, range_length)
-                        .await?;
-                    let len = bytes.len();
-                    self.buf.put(bytes);
-                    min(len, length)
-                } else {
-                    length
-                };
-            self.offset = begin + slice_len;
+            let slice_len = if let Some((range_begin, range_length)) =
+                self.buffer.get_request_range(begin, length)
+            {
+                let range = self.range(range_begin, range_length);
+                let bytes = self.http_client.get_range(&self.url, &range).await?;
+                let len = bytes.len();
+                self.buffer.buf.put(bytes);
+                min(len, length)
+            } else {
+                length
+            };
+            self.buffer.offset = begin + slice_len;
             // Return slice from buffer
-            let lower = begin - self.head;
-            Ok(&self.buf[lower..lower + slice_len])
+            let lower = begin - self.buffer.head;
+            Ok(&self.buffer.buf[lower..lower + slice_len])
         }
 
         /// Get `length` bytes from current offset.
         pub async fn get_bytes(&mut self, length: usize) -> Result<&[u8]> {
-            self.get_range(self.offset, length).await
+            self.get_range(self.buffer.offset, length).await
         }
     }
 }
 
-#[cfg(feature = "sync")]
-mod sync {
+#[cfg(feature = "logging")]
+pub(crate) mod stats {
+    use log::debug;
+
+    #[derive(Default)]
+    pub(crate) struct RequestStats {
+        requests_ever_made: usize,
+        bytes_ever_requested: usize,
+    }
+
+    impl RequestStats {
+        pub fn log_get_range(&mut self, _begin: usize, length: usize, range: &str) {
+            self.requests_ever_made += 1;
+            self.bytes_ever_requested += length;
+            debug!(
+                "request: #{}, bytes: (this_request: {length}, ever: {}), Range: {range}",
+                self.requests_ever_made, self.bytes_ever_requested,
+            );
+        }
+    }
+}
+
+pub(crate) mod sync {
     use super::*;
+    use crate::range_client::SyncHttpRangeClient;
     use bytes::Buf;
     use std::io::{Read, Seek, SeekFrom};
 
-    impl BufferedHttpRangeClient {
+    /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential requests
+    pub struct SyncBufferedHttpRangeClient<T: SyncHttpRangeClient> {
+        http_client: T,
+        url: String,
+        buffer: HttpRangeBuffer,
+        #[cfg(feature = "logging")]
+        stats: stats::RequestStats,
+    }
+
+    impl<T: SyncHttpRangeClient> SyncBufferedHttpRangeClient<T> {
+        pub fn with(http_client: T, url: &str) -> SyncBufferedHttpRangeClient<T> {
+            SyncBufferedHttpRangeClient {
+                http_client,
+                url: url.to_string(),
+                buffer: HttpRangeBuffer::new(),
+                #[cfg(feature = "logging")]
+                stats: stats::RequestStats::default(),
+            }
+        }
+
+        /// Set minimal request size.
+        pub fn set_min_req_size(&mut self, size: usize) {
+            self.buffer.min_req_size = size;
+        }
+
+        /// Set minimal request size.
+        pub fn min_req_size(&mut self, size: usize) -> &mut Self {
+            self.set_min_req_size(size);
+            self
+        }
+
+        fn range(&mut self, begin: usize, length: usize) -> String {
+            let range = format!("bytes={begin}-{}", begin + length - 1);
+            #[cfg(feature = "logging")]
+            self.stats.log_get_range(begin, length, &range);
+            range
+        }
+
         /// Get `length` bytes with offset `begin`.
         pub fn get_range(&mut self, begin: usize, length: usize) -> Result<&[u8]> {
-            let slice_len =
-                if let Some((range_begin, range_length)) = self.get_request_range(begin, length) {
-                    let bytes = self.http_client.get_range(range_begin, range_length)?;
-                    let len = bytes.len();
-                    self.buf.put(bytes);
-                    min(len, length)
-                } else {
-                    length
-                };
-            self.offset = begin + slice_len;
+            let slice_len = if let Some((range_begin, range_length)) =
+                self.buffer.get_request_range(begin, length)
+            {
+                let range = self.range(range_begin, range_length);
+                let bytes = self.http_client.get_range(&self.url, &range)?;
+                let len = bytes.len();
+                self.buffer.buf.put(bytes);
+                min(len, length)
+            } else {
+                length
+            };
+            self.buffer.offset = begin + slice_len;
             // Return slice from buffer
-            let lower = begin - self.head;
-            Ok(&self.buf[lower..lower + slice_len])
+            let lower = begin - self.buffer.head;
+            Ok(&self.buffer.buf[lower..lower + slice_len])
         }
 
         /// Get `length` bytes from current offset.
         pub fn get_bytes(&mut self, length: usize) -> Result<&[u8]> {
-            self.get_range(self.offset, length)
+            self.get_range(self.buffer.offset, length)
         }
     }
 
-    impl Read for BufferedHttpRangeClient {
+    impl<T: SyncHttpRangeClient> Read for SyncBufferedHttpRangeClient<T> {
         fn read(&mut self, buf: &mut [u8]) -> std::result::Result<usize, std::io::Error> {
             let length = buf.len();
             let mut bytes = self
-                .get_range(self.offset, length)
+                .get_range(self.buffer.offset, length)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             // TODO: return Error::from(ErrorKind::UnexpectedEof) for HTTP status 416
             bytes.copy_to_slice(&mut buf[0..bytes.len()]);
@@ -150,11 +233,11 @@ mod sync {
         }
     }
 
-    impl Seek for BufferedHttpRangeClient {
+    impl<T: SyncHttpRangeClient> Seek for SyncBufferedHttpRangeClient<T> {
         fn seek(&mut self, pos: SeekFrom) -> std::result::Result<u64, std::io::Error> {
             match pos {
                 SeekFrom::Start(p) => {
-                    self.offset = p as usize;
+                    self.buffer.offset = p as usize;
                     Ok(p)
                 }
                 SeekFrom::End(_) => Err(std::io::Error::new(
@@ -162,8 +245,8 @@ mod sync {
                     "Request size unkonwn",
                 )),
                 SeekFrom::Current(p) => {
-                    self.offset = self.offset.saturating_add_signed(p as isize);
-                    Ok(self.offset as u64)
+                    self.buffer.offset = self.buffer.offset.saturating_add_signed(p as isize);
+                    Ok(self.buffer.offset as u64)
                 }
             }
         }
@@ -171,9 +254,9 @@ mod sync {
 }
 
 #[cfg(test)]
-#[cfg(not(feature = "sync"))]
+#[cfg(feature = "reqwest-async")]
 mod test_async {
-    use crate::{BufferedHttpRangeClient, Result};
+    use crate::{AsyncBufferedHttpRangeClient, BufferedHttpRangeClient, Result};
 
     fn init_logger() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -227,12 +310,28 @@ mod test_async {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn custom_headers() -> Result<()> {
+        init_logger();
+        let http_client = reqwest::Client::builder()
+            .user_agent("rust-client")
+            .build()
+            .unwrap();
+        let mut client = AsyncBufferedHttpRangeClient::with(
+            http_client,
+            "https://flatgeobuf.org/test/data/countries.fgb",
+        );
+        let bytes = client.min_req_size(256).get_range(0, 3).await?;
+        assert_eq!(bytes, b"fgb");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
-#[cfg(feature = "sync")]
+#[cfg(feature = "reqwest-sync")]
 mod test_sync {
-    use crate::{BufferedHttpRangeClient, Result};
+    use crate::{HttpReader, Result};
     use std::io::{Read, Seek, SeekFrom};
 
     fn init_logger() {
@@ -242,8 +341,7 @@ mod test_sync {
     #[test]
     fn http_read_sync() -> Result<()> {
         init_logger();
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 3)?;
         assert_eq!(bytes, b"fgb");
 
@@ -258,8 +356,7 @@ mod test_sync {
     #[test]
     fn http_read_sync_zero_range() -> Result<()> {
         init_logger();
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 0)?;
         assert_eq!(bytes, []);
         Ok(())
@@ -268,8 +365,7 @@ mod test_sync {
     #[test]
     fn io_read() -> std::io::Result<()> {
         init_logger();
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         client.seek(SeekFrom::Start(3)).ok();
         let mut version = [0; 1];
         client.min_req_size(256).read_exact(&mut version)?;
@@ -284,8 +380,7 @@ mod test_sync {
     #[test]
     fn io_read_over_min_req_size() -> std::io::Result<()> {
         init_logger();
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         let mut bytes = [0; 8];
         client.min_req_size(4).read_exact(&mut bytes)?;
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
@@ -295,8 +390,7 @@ mod test_sync {
     #[test]
     fn io_read_non_exact() -> std::io::Result<()> {
         init_logger();
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         let mut bytes = [0; 8];
         // We could only read 4 bytes in this case
         client.min_req_size(4).read(&mut bytes)?;
@@ -308,8 +402,7 @@ mod test_sync {
     fn after_end() -> std::io::Result<()> {
         init_logger();
         // countries.fgb has 205680 bytes
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         client.seek(SeekFrom::Start(205670)).ok();
         let mut bytes = [0; 10];
         client.read_exact(&mut bytes)?;
@@ -326,6 +419,18 @@ mod test_sync {
             [78, 192, 205, 204, 204, 204, 204, 236, 73, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn remote_png() -> std::io::Result<()> {
+        init_logger();
+        let mut client =
+            HttpReader::new("https://www.rust-lang.org/static/images/favicon-32x32.png");
+        client.seek(SeekFrom::Start(1)).ok();
+        let mut bytes = [0; 3];
+        client.read_exact(&mut bytes)?;
+        assert_eq!(&bytes, b"PNG");
         Ok(())
     }
 }

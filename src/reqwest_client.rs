@@ -1,18 +1,15 @@
 use crate::error::{HttpError, Result};
-use crate::range_client::{GenericHttpRangeClient, HttpRangeClient};
 use bytes::Bytes;
 
-#[cfg(not(feature = "sync"))]
+#[cfg(feature = "reqwest-async")]
 pub(crate) mod nonblocking {
     use super::*;
+    use crate::range_client::AsyncHttpRangeClient;
     use async_trait::async_trait;
 
     #[cfg(not(target_arch = "wasm32"))]
     #[async_trait]
-    impl HttpRangeClient for reqwest::Client {
-        fn new() -> Self {
-            Self::new()
-        }
+    impl AsyncHttpRangeClient for reqwest::Client {
         async fn get_range(&self, url: &str, range: &str) -> Result<Bytes> {
             let response = self
                 .get(url)
@@ -32,10 +29,7 @@ pub(crate) mod nonblocking {
 
     #[cfg(target_arch = "wasm32")]
     #[async_trait(?Send)]
-    impl HttpRangeClient for reqwest::Client {
-        fn new() -> Self {
-            Self::new()
-        }
+    impl AsyncHttpRangeClient for reqwest::Client {
         async fn get_range(&self, url: &str, range: &str) -> Result<Bytes> {
             let response = self
                 .get(url)
@@ -53,17 +47,22 @@ pub(crate) mod nonblocking {
         }
     }
 
-    pub(crate) type HttpClient = GenericHttpRangeClient<reqwest::Client>;
+    /// Async HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+    pub type BufferedHttpRangeClient = crate::AsyncBufferedHttpRangeClient<reqwest::Client>;
+
+    impl BufferedHttpRangeClient {
+        pub fn new(url: &str) -> Self {
+            Self::with(reqwest::Client::new(), url)
+        }
+    }
 }
 
-#[cfg(feature = "sync")]
+#[cfg(feature = "reqwest-sync")]
 pub(crate) mod sync {
     use super::*;
+    use crate::range_client::SyncHttpRangeClient;
 
-    impl HttpRangeClient for reqwest::blocking::Client {
-        fn new() -> Self {
-            Self::new()
-        }
+    impl SyncHttpRangeClient for reqwest::blocking::Client {
         fn get_range(&self, url: &str, range: &str) -> Result<Bytes> {
             let response = self
                 .get(url)
@@ -79,5 +78,12 @@ pub(crate) mod sync {
         }
     }
 
-    pub(crate) type HttpClient = GenericHttpRangeClient<reqwest::blocking::Client>;
+    /// Sync HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+    pub type HttpReader = crate::SyncBufferedHttpRangeClient<reqwest::blocking::Client>;
+
+    impl HttpReader {
+        pub fn new(url: &str) -> Self {
+            Self::with(reqwest::blocking::Client::new(), url)
+        }
+    }
 }

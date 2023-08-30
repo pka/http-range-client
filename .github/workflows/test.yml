@@ -28,7 +28,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --target ${{matrix.target}}
+          args: --target ${{matrix.target}} --no-default-features --features=reqwest-async
 
   test:
     strategy:
@@ -62,12 +62,8 @@ jobs:
           command: test
           args: --target ${{matrix.target}} --all-features -- --test-threads 1
 
-      # This is currently broken because
-      # reqwest is not actually optional
-      #
-      # - name: test --no-default-features
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     command: test
-      #     args: --target ${{matrix.target}} --no-default-features
-
+      - name: test --no-default-features
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --target ${{matrix.target}} --no-default-features
