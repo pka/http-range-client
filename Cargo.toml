@@ -25,3 +25,6 @@ async-trait = "0.1.51"
 [dev-dependencies]
 tokio = { version = "1.0.2", default-features = false, features = ["rt-multi-thread", "macros"] }
 env_logger = "0.10.0"
+
+[package.metadata.docs.rs]
+all-features = true

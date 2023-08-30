@@ -66,7 +66,7 @@ impl<T: HttpRangeClient> GenericHttpRangeClient<T> {
         }
     }
     fn get_range_header(&mut self, begin: usize, length: usize) -> String {
-        let range = format!("bytes={}-{}", begin, begin + length - 1);
+        let range = format!("bytes={begin}-{}", begin + length - 1);
         #[cfg(feature = "log")]
         self.stats.log_get_range(begin, length, &range);
         range
