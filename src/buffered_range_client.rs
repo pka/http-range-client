@@ -53,6 +53,8 @@ impl BufferedHttpRangeClient {
         //                    +---+
         //                    length
 
+        #[cfg(feature = "log")]
+        log::trace!("read begin: {begin}, Length: {length}");
         // Download additional bytes if requested range is not in buffer
         if begin + length > self.tail() || begin < self.head {
             // Remove bytes before new begin
@@ -139,8 +141,6 @@ mod sync {
     impl Read for BufferedHttpRangeClient {
         fn read(&mut self, buf: &mut [u8]) -> std::result::Result<usize, std::io::Error> {
             let length = buf.len();
-            #[cfg(feature = "log")]
-            log::debug!("read offset: {}, Length: {length}", self.offset);
             let mut bytes = self
                 .get_range(self.offset, length)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
@@ -175,8 +175,13 @@ mod sync {
 mod test_async {
     use crate::{BufferedHttpRangeClient, Result};
 
+    fn init_logger() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[tokio::test]
     async fn http_read_async() -> Result<()> {
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 3).await?;
@@ -197,6 +202,7 @@ mod test_async {
 
     #[tokio::test]
     async fn zero_range() -> Result<()> {
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.get_range(100, 0).await?;
@@ -206,6 +212,7 @@ mod test_async {
 
     #[tokio::test]
     async fn after_end() -> Result<()> {
+        init_logger();
         // countries.fgb has 205680 bytes
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
@@ -228,8 +235,13 @@ mod test_sync {
     use crate::{BufferedHttpRangeClient, Result};
     use std::io::{Read, Seek, SeekFrom};
 
+    fn init_logger() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[test]
     fn http_read_sync() -> Result<()> {
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 3)?;
@@ -245,6 +257,7 @@ mod test_sync {
 
     #[test]
     fn http_read_sync_zero_range() -> Result<()> {
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 0)?;
@@ -254,9 +267,7 @@ mod test_sync {
 
     #[test]
     fn io_read() -> std::io::Result<()> {
-        std::env::set_var("RUST_LOG", "debug");
-        env_logger::init();
-
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         client.seek(SeekFrom::Start(3)).ok();
@@ -272,6 +283,7 @@ mod test_sync {
 
     #[test]
     fn io_read_over_min_req_size() -> std::io::Result<()> {
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let mut bytes = [0; 8];
@@ -282,6 +294,7 @@ mod test_sync {
 
     #[test]
     fn io_read_non_exact() -> std::io::Result<()> {
+        init_logger();
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let mut bytes = [0; 8];
@@ -293,6 +306,7 @@ mod test_sync {
 
     #[test]
     fn after_end() -> std::io::Result<()> {
+        init_logger();
         // countries.fgb has 205680 bytes
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
