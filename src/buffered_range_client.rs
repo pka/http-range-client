@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::HttpClient;
 use bytes::{BufMut, BytesMut};
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::str;
 
 /// HTTP client for HTTP Range requests with a buffer optimized for sequential requests
@@ -81,17 +81,22 @@ mod nonblocking {
     impl BufferedHttpRangeClient {
         /// Get `length` bytes with offset `begin`.
         pub async fn get_range(&mut self, begin: usize, length: usize) -> Result<&[u8]> {
-            if let Some((range_begin, range_length)) = self.get_request_range(begin, length) {
-                let bytes = self
-                    .http_client
-                    .get_range(range_begin, range_length)
-                    .await?;
-                self.buf.put(bytes);
-            }
-            self.offset = begin + length;
+            let slice_len =
+                if let Some((range_begin, range_length)) = self.get_request_range(begin, length) {
+                    let bytes = self
+                        .http_client
+                        .get_range(range_begin, range_length)
+                        .await?;
+                    let len = bytes.len();
+                    self.buf.put(bytes);
+                    min(len, length)
+                } else {
+                    length
+                };
+            self.offset = begin + slice_len;
             // Return slice from buffer
             let lower = begin - self.head;
-            Ok(&self.buf[lower..lower + length])
+            Ok(&self.buf[lower..lower + slice_len])
         }
 
         /// Get `length` bytes from current offset.
@@ -110,14 +115,19 @@ mod sync {
     impl BufferedHttpRangeClient {
         /// Get `length` bytes with offset `begin`.
         pub fn get_range(&mut self, begin: usize, length: usize) -> Result<&[u8]> {
-            if let Some((range_begin, range_length)) = self.get_request_range(begin, length) {
-                let bytes = self.http_client.get_range(range_begin, range_length)?;
-                self.buf.put(bytes);
-            }
-            self.offset = begin + length;
+            let slice_len =
+                if let Some((range_begin, range_length)) = self.get_request_range(begin, length) {
+                    let bytes = self.http_client.get_range(range_begin, range_length)?;
+                    let len = bytes.len();
+                    self.buf.put(bytes);
+                    min(len, length)
+                } else {
+                    length
+                };
+            self.offset = begin + slice_len;
             // Return slice from buffer
             let lower = begin - self.head;
-            Ok(&self.buf[lower..lower + length])
+            Ok(&self.buf[lower..lower + slice_len])
         }
 
         /// Get `length` bytes from current offset.
@@ -135,7 +145,7 @@ mod sync {
                 .get_range(self.offset, length)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             // TODO: return Error::from(ErrorKind::UnexpectedEof) for HTTP status 416
-            bytes.copy_to_slice(buf);
+            bytes.copy_to_slice(&mut buf[0..bytes.len()]);
             Ok(length)
         }
     }
@@ -205,18 +215,10 @@ mod test_async {
         let bytes = client.get_bytes(10).await;
         assert_eq!(&bytes.unwrap_err().to_string(), "http status 416");
 
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[should_panic]
-    async fn after_end_panic() {
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
-
-        let bytes = client.get_range(205670, 20).await.unwrap();
-        // FIXME: 'range end index 20 out of range for slice of length 10', src/buffered_range_client.rs:94:17
+        let bytes = client.get_range(205670, 20).await?;
         assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
+
+        Ok(())
     }
 }
 
@@ -238,6 +240,15 @@ mod test_sync {
 
         let bytes = client.get_bytes(3)?;
         assert_eq!(bytes, b"fgb");
+        Ok(())
+    }
+
+    #[test]
+    fn http_read_sync_zero_range() -> Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.min_req_size(256).get_range(0, 0)?;
+        assert_eq!(bytes, []);
         Ok(())
     }
 
@@ -293,21 +304,14 @@ mod test_sync {
         let result = client.read_exact(&mut bytes);
         assert_eq!(result.unwrap_err().to_string(), "http status 416");
 
-        Ok(())
-    }
-
-    #[test]
-    #[should_panic]
-    fn after_end_panic() {
-        let mut client =
-            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         client.seek(SeekFrom::Start(205670)).ok();
         let mut bytes = [0; 20];
-        client.read_exact(&mut bytes).unwrap();
-        // FIXME: 'range end index 20 out of range for slice of length 10', src/buffered_range_client.rs:120:17
+        client.read_exact(&mut bytes)?;
         assert_eq!(
             bytes,
             [78, 192, 205, 204, 204, 204, 204, 236, 73, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
+
+        Ok(())
     }
 }
