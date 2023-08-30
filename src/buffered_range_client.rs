@@ -130,7 +130,7 @@ mod sync {
         fn read(&mut self, buf: &mut [u8]) -> std::result::Result<usize, std::io::Error> {
             let length = buf.len();
             debug!("Offset: {}, Length: {length}", self.offset);
-            let mut bytes = self.get_range(self.offset as usize, length).unwrap();
+            let mut bytes = self.get_range(self.offset, length).unwrap();
             bytes.copy_to_slice(buf);
             Ok(length)
         }
@@ -166,7 +166,18 @@ mod test_async {
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 3).await?;
-        assert_eq!(bytes, "fgb".as_bytes());
+        assert_eq!(bytes, b"fgb");
+        let version = client.get_bytes(1).await?;
+        assert_eq!(version, [3]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_over_min_req_size() -> Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.min_req_size(4).get_range(0, 8).await?;
+        assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
         Ok(())
     }
 }
@@ -182,13 +193,13 @@ mod test_sync {
         let mut client =
             BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
         let bytes = client.min_req_size(256).get_range(0, 3)?;
-        assert_eq!(bytes, "fgb".as_bytes());
+        assert_eq!(bytes, b"fgb");
 
         let version = client.get_bytes(1)?;
-        assert_eq!(version, &[3]);
+        assert_eq!(version, [3]);
 
         let bytes = client.get_bytes(3)?;
-        assert_eq!(bytes, "fgb".as_bytes());
+        assert_eq!(bytes, b"fgb");
         Ok(())
     }
 
@@ -202,11 +213,32 @@ mod test_sync {
         client.seek(SeekFrom::Start(3)).ok();
         let mut version = [0; 1];
         client.min_req_size(256).read_exact(&mut version)?;
-        assert_eq!(&version, &[3]);
+        assert_eq!(version, [3]);
 
         let mut bytes = [0; 3];
         client.read_exact(&mut bytes)?;
         assert_eq!(&bytes, b"fgb");
+        Ok(())
+    }
+
+    #[test]
+    fn io_read_over_min_req_size() -> std::io::Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut bytes = [0; 8];
+        client.min_req_size(4).read_exact(&mut bytes)?;
+        assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
+        Ok(())
+    }
+
+    #[test]
+    fn io_read_non_exact() -> std::io::Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut bytes = [0; 8];
+        // We could only read 4 bytes in this case
+        client.min_req_size(4).read(&mut bytes)?;
+        assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
         Ok(())
     }
 }
