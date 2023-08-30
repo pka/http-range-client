@@ -131,7 +131,10 @@ mod sync {
             let length = buf.len();
             #[cfg(feature = "log")]
             log::debug!("read offset: {}, Length: {length}", self.offset);
-            let mut bytes = self.get_range(self.offset, length).unwrap();
+            let mut bytes = self
+                .get_range(self.offset, length)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            // TODO: return Error::from(ErrorKind::UnexpectedEof) for HTTP status 416
             bytes.copy_to_slice(buf);
             Ok(length)
         }
@@ -180,6 +183,40 @@ mod test_async {
         let bytes = client.min_req_size(4).get_range(0, 8).await?;
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn zero_range() -> Result<()> {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.get_range(100, 0).await?;
+        assert_eq!(bytes, []);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn after_end() -> Result<()> {
+        // countries.fgb has 205680 bytes
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.get_range(205670, 10).await?;
+        assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
+
+        let bytes = client.get_bytes(10).await;
+        assert_eq!(&bytes.unwrap_err().to_string(), "http status 416");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn after_end_panic() {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+
+        let bytes = client.get_range(205670, 20).await.unwrap();
+        // FIXME: 'range end index 20 out of range for slice of length 10', src/buffered_range_client.rs:94:17
+        assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
     }
 }
 
@@ -241,5 +278,36 @@ mod test_sync {
         client.min_req_size(4).read(&mut bytes)?;
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
         Ok(())
+    }
+
+    #[test]
+    fn after_end() -> std::io::Result<()> {
+        // countries.fgb has 205680 bytes
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        client.seek(SeekFrom::Start(205670)).ok();
+        let mut bytes = [0; 10];
+        client.read_exact(&mut bytes)?;
+        assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
+
+        let result = client.read_exact(&mut bytes);
+        assert_eq!(result.unwrap_err().to_string(), "http status 416");
+
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic]
+    fn after_end_panic() {
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        client.seek(SeekFrom::Start(205670)).ok();
+        let mut bytes = [0; 20];
+        client.read_exact(&mut bytes).unwrap();
+        // FIXME: 'range end index 20 out of range for slice of length 10', src/buffered_range_client.rs:120:17
+        assert_eq!(
+            bytes,
+            [78, 192, 205, 204, 204, 204, 204, 236, 73, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
     }
 }
