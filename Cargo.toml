@@ -19,7 +19,7 @@ byteorder = "1.4.2"
 reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
 bytes = { version = "1.0.1" }
 thiserror = "1.0"
-log = "0.4.13"
+log = { version = "0.4.13", optional = true }
 async-trait = "0.1.51"
 
 [dev-dependencies]

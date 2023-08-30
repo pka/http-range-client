@@ -129,7 +129,8 @@ mod sync {
     impl Read for BufferedHttpRangeClient {
         fn read(&mut self, buf: &mut [u8]) -> std::result::Result<usize, std::io::Error> {
             let length = buf.len();
-            debug!("Offset: {}, Length: {length}", self.offset);
+            #[cfg(feature = "log")]
+            log::debug!("read offset: {}, Length: {length}", self.offset);
             let mut bytes = self.get_range(self.offset, length).unwrap();
             bytes.copy_to_slice(buf);
             Ok(length)

@@ -43,9 +43,6 @@
 //! # }
 //! ```
 
-#[macro_use]
-extern crate log;
-
 mod buffered_range_client;
 mod error;
 mod range_client;

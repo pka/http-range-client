@@ -30,23 +30,29 @@ pub(crate) trait HttpRangeClient {
 pub(crate) struct GenericHttpRangeClient<T: HttpRangeClient> {
     client: T,
     url: String,
-    stats: RequestStats,
+    #[cfg(feature = "log")]
+    stats: stats::RequestStats,
 }
 
-#[derive(Default)]
-struct RequestStats {
-    requests_ever_made: usize,
-    bytes_ever_requested: usize,
-}
+#[cfg(feature = "log")]
+pub(crate) mod stats {
+    use log::debug;
 
-impl RequestStats {
-    fn log_get_range(&mut self, _begin: usize, length: usize, range: &str) {
-        self.requests_ever_made += 1;
-        self.bytes_ever_requested += length;
-        debug!(
-            "request: #{}, bytes: (this_request: {length}, ever: {}), Range: {range}",
-            self.requests_ever_made, self.bytes_ever_requested,
-        );
+    #[derive(Default)]
+    pub(crate) struct RequestStats {
+        requests_ever_made: usize,
+        bytes_ever_requested: usize,
+    }
+
+    impl RequestStats {
+        pub fn log_get_range(&mut self, _begin: usize, length: usize, range: &str) {
+            self.requests_ever_made += 1;
+            self.bytes_ever_requested += length;
+            debug!(
+                "request: #{}, bytes: (this_request: {length}, ever: {}), Range: {range}",
+                self.requests_ever_made, self.bytes_ever_requested,
+            );
+        }
     }
 }
 
@@ -55,11 +61,13 @@ impl<T: HttpRangeClient> GenericHttpRangeClient<T> {
         GenericHttpRangeClient {
             client: T::new(),
             url: url.to_string(),
-            stats: RequestStats::default(),
+            #[cfg(feature = "log")]
+            stats: stats::RequestStats::default(),
         }
     }
     fn get_range_header(&mut self, begin: usize, length: usize) -> String {
         let range = format!("bytes={}-{}", begin, begin + length - 1);
+        #[cfg(feature = "log")]
         self.stats.log_get_range(begin, length, &range);
         range
     }
