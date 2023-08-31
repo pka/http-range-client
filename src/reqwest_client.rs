@@ -11,11 +11,7 @@ pub(crate) mod nonblocking {
     #[async_trait]
     impl AsyncHttpRangeClient for reqwest::Client {
         async fn get_range(&self, url: &str, range: &str) -> Result<Bytes> {
-            let response = self
-                .get(url)
-                .header("Range", range)
-                .send()
-                .await?;
+            let response = self.get(url).header("Range", range).send().await?;
             if !response.status().is_success() {
                 return Err(HttpError::HttpStatus(response.status().as_u16()));
             }
@@ -30,11 +26,7 @@ pub(crate) mod nonblocking {
     #[async_trait(?Send)]
     impl AsyncHttpRangeClient for reqwest::Client {
         async fn get_range(&self, url: &str, range: &str) -> Result<Bytes> {
-            let response = self
-                .get(url)
-                .header("Range", range)
-                .send()
-                .await?;
+            let response = self.get(url).header("Range", range).send().await?;
             if !response.status().is_success() {
                 return Err(HttpError::HttpStatus(response.status().as_u16()));
             }
@@ -62,10 +54,7 @@ pub(crate) mod sync {
 
     impl SyncHttpRangeClient for reqwest::blocking::Client {
         fn get_range(&self, url: &str, range: &str) -> Result<Bytes> {
-            let response = self
-                .get(url)
-                .header("Range", range)
-                .send()?;
+            let response = self.get(url).header("Range", range).send()?;
             if !response.status().is_success() {
                 return Err(HttpError::HttpStatus(response.status().as_u16()));
             }

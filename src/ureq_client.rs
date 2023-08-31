@@ -1,6 +1,7 @@
 use crate::error::{HttpError, Result};
 use bytes::Bytes;
 use std::io::Read;
+use std::iter::FromIterator;
 use std::time::Duration;
 
 #[cfg(feature = "ureq-sync")]
@@ -14,14 +15,9 @@ pub(crate) mod sync {
             if response.status() < 200 || response.status() > 299 {
                 return Err(HttpError::HttpStatus(response.status()));
             }
-            // Direct read via Bytes::from_iter ?
-            let mut bytes: Vec<u8> = Vec::new();
-            response
-                .into_reader()
-                .take(10_000_000)
-                .read_to_end(&mut bytes)
-                .map_err(|e| HttpError::HttpError(e.to_string()))?;
-            Ok(Bytes::from(bytes))
+            // TODO: return error instead of dropping remaining bytes
+            let bytes = response.into_reader().bytes().map_while(|val| val.ok());
+            Ok(Bytes::from_iter(bytes))
         }
     }
 
