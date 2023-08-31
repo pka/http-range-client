@@ -15,8 +15,7 @@ pub(crate) mod nonblocking {
                 .get(url)
                 .header("Range", range)
                 .send()
-                .await
-                .map_err(|e| HttpError::HttpError(e.to_string()))?;
+                .await?;
             if !response.status().is_success() {
                 return Err(HttpError::HttpStatus(response.status().as_u16()));
             }
@@ -35,8 +34,7 @@ pub(crate) mod nonblocking {
                 .get(url)
                 .header("Range", range)
                 .send()
-                .await
-                .map_err(|e| HttpError::HttpError(e.to_string()))?;
+                .await?;
             if !response.status().is_success() {
                 return Err(HttpError::HttpStatus(response.status().as_u16()));
             }
@@ -67,8 +65,7 @@ pub(crate) mod sync {
             let response = self
                 .get(url)
                 .header("Range", range)
-                .send()
-                .map_err(|e| HttpError::HttpError(e.to_string()))?;
+                .send()?;
             if !response.status().is_success() {
                 return Err(HttpError::HttpStatus(response.status().as_u16()));
             }
@@ -84,6 +81,16 @@ pub(crate) mod sync {
     impl HttpReader {
         pub fn new(url: &str) -> Self {
             Self::with(reqwest::blocking::Client::new(), url)
+        }
+    }
+}
+
+impl From<reqwest::Error> for HttpError {
+    fn from(error: reqwest::Error) -> Self {
+        if let Some(status) = error.status() {
+            HttpError::HttpStatus(status.as_u16())
+        } else {
+            HttpError::HttpError(error.to_string())
         }
     }
 }
