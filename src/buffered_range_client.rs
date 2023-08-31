@@ -1,5 +1,6 @@
 use crate::error::Result;
 use bytes::{BufMut, BytesMut};
+use log::{debug, trace};
 use std::cmp::{max, min};
 use std::str;
 
@@ -39,8 +40,7 @@ impl HttpRangeBuffer {
         //                    +---+
         //                    length
 
-        #[cfg(feature = "logging")]
-        log::trace!("read begin: {begin}, Length: {length}");
+        trace!("read begin: {begin}, Length: {length}");
         // Download additional bytes if requested range is not in buffer
         if begin + length > self.tail() || begin < self.head {
             // Remove bytes before new begin
@@ -71,7 +71,6 @@ pub(crate) mod nonblocking {
         http_client: T,
         url: String,
         buffer: HttpRangeBuffer,
-        #[cfg(feature = "logging")]
         stats: stats::RequestStats,
     }
 
@@ -81,7 +80,6 @@ pub(crate) mod nonblocking {
                 http_client,
                 url: url.to_string(),
                 buffer: HttpRangeBuffer::new(),
-                #[cfg(feature = "logging")]
                 stats: stats::RequestStats::default(),
             }
         }
@@ -99,7 +97,6 @@ pub(crate) mod nonblocking {
 
         fn range(&mut self, begin: usize, length: usize) -> String {
             let range = format!("bytes={begin}-{}", begin + length - 1);
-            #[cfg(feature = "logging")]
             self.stats.log_get_range(begin, length, &range);
             range
         }
@@ -130,9 +127,8 @@ pub(crate) mod nonblocking {
     }
 }
 
-#[cfg(feature = "logging")]
 pub(crate) mod stats {
-    use log::debug;
+    use super::*;
 
     #[derive(Default)]
     pub(crate) struct RequestStats {
@@ -163,7 +159,6 @@ pub(crate) mod sync {
         http_client: T,
         url: String,
         buffer: HttpRangeBuffer,
-        #[cfg(feature = "logging")]
         stats: stats::RequestStats,
     }
 
@@ -173,7 +168,6 @@ pub(crate) mod sync {
                 http_client,
                 url: url.to_string(),
                 buffer: HttpRangeBuffer::new(),
-                #[cfg(feature = "logging")]
                 stats: stats::RequestStats::default(),
             }
         }
@@ -191,7 +185,6 @@ pub(crate) mod sync {
 
         fn range(&mut self, begin: usize, length: usize) -> String {
             let range = format!("bytes={begin}-{}", begin + length - 1);
-            #[cfg(feature = "logging")]
             self.stats.log_get_range(begin, length, &range);
             range
         }
