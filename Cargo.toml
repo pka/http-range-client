@@ -11,9 +11,10 @@ license = "MIT/Apache-2.0"
 keywords = ["http", "reader", "buffer"]
 
 [features]
-default = ["reqwest-sync", "reqwest-async"]
+default = ["reqwest-async", "reqwest-sync"]
 reqwest-async = ["reqwest"]
 reqwest-sync = ["reqwest/blocking"]
+ureq-sync = ["ureq"]
 
 [dependencies]
 async-trait = "0.1.51"
@@ -22,6 +23,7 @@ bytes = "1.0.1"
 log = "0.4.13"
 reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
 thiserror = "1.0"
+ureq = { version = "2.7.1", optional = true }
 
 [dev-dependencies]
 env_logger = "0.10.0"

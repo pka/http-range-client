@@ -28,7 +28,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --target ${{matrix.target}} --no-default-features --features=reqwest-async
+          args: --target ${{matrix.target}} --no-default-features --features=reqwest-async,ureq-sync
 
   test:
     strategy:

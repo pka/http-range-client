@@ -45,6 +45,8 @@ mod error;
 mod range_client;
 #[cfg(any(feature = "reqwest-async", feature = "reqwest-sync"))]
 mod reqwest_client;
+#[cfg(feature = "ureq-sync")]
+mod ureq_client;
 
 pub use buffered_range_client::nonblocking::AsyncBufferedHttpRangeClient;
 pub use buffered_range_client::sync::SyncBufferedHttpRangeClient;
@@ -55,3 +57,5 @@ pub use range_client::*;
 pub use crate::reqwest_client::nonblocking::BufferedHttpRangeClient;
 #[cfg(feature = "reqwest-sync")]
 pub use crate::reqwest_client::sync::HttpReader;
+#[cfg(feature = "ureq-sync")]
+pub use crate::ureq_client::sync::UreqHttpReader;

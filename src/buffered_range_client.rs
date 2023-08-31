@@ -151,6 +151,7 @@ pub(crate) mod stats {
 pub(crate) mod sync {
     use super::*;
     use crate::range_client::SyncHttpRangeClient;
+    use crate::HttpError;
     use bytes::Buf;
     use std::io::{Read, Seek, SeekFrom};
 
@@ -219,8 +220,13 @@ pub(crate) mod sync {
             let length = buf.len();
             let mut bytes = self
                 .get_range(self.buffer.offset, length)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-            // TODO: return Error::from(ErrorKind::UnexpectedEof) for HTTP status 416
+                .map_err(|e| match e {
+                    HttpError::HttpStatus(416) => {
+                        std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
+                    }
+                    e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                })?;
+            // TODO: return  for HTTP status 416
             bytes.copy_to_slice(&mut buf[0..bytes.len()]);
             Ok(length)
         }
@@ -322,9 +328,13 @@ mod test_async {
 }
 
 #[cfg(test)]
-#[cfg(feature = "reqwest-sync")]
+#[cfg(any(feature = "reqwest-sync", feature = "ureq-sync"))]
 mod test_sync {
-    use crate::{HttpReader, Result};
+    #[cfg(feature = "reqwest-sync")]
+    use crate::HttpReader;
+    use crate::Result;
+    #[cfg(all(feature = "ureq-sync", not(feature = "reqwest-sync")))]
+    use crate::UreqHttpReader as HttpReader;
     use std::io::{Read, Seek, SeekFrom};
 
     fn init_logger() {
@@ -402,7 +412,7 @@ mod test_sync {
         assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
 
         let result = reader.read_exact(&mut bytes);
-        assert_eq!(result.unwrap_err().to_string(), "http status 416");
+        assert_eq!(result.unwrap_err().to_string(), "unexpected end of file");
 
         reader.seek(SeekFrom::Start(205670)).ok();
         let mut bytes = [0; 20];
