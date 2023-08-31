@@ -67,3 +67,9 @@ jobs:
         with:
           command: test
           args: --target ${{matrix.target}} --no-default-features
+
+      - name: test --features=ureq-sync
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --target ${{matrix.target}} --no-default-features --features=ureq-sync

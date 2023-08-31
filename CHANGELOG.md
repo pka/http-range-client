@@ -5,7 +5,7 @@
 * Breaking: Replace `min_req_size` parameter in `get_range` with separate methods
 * Add `get_bytes` method for sequential reading
 * Export traits and adapter for external implementations
-* Fix wasm32 build
+* Fix panic when requesting data after EOF
 * Add feature flags
 
 ## 0.6.0 (2021-11-10)
