@@ -45,7 +45,7 @@ pub(crate) mod nonblocking {
         }
     }
 
-    /// Async HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+    /// Async HTTP client for HTTP Range requests with a buffer optimized for sequential reading.
     pub type BufferedHttpRangeClient = crate::AsyncBufferedHttpRangeClient<reqwest::Client>;
 
     impl BufferedHttpRangeClient {
@@ -75,7 +75,7 @@ pub(crate) mod sync {
         }
     }
 
-    /// Sync HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+    /// Sync HTTP client for HTTP Range requests with a buffer optimized for sequential reading.
     pub type HttpReader = crate::SyncBufferedHttpRangeClient<reqwest::blocking::Client>;
 
     impl HttpReader {

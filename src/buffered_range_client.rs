@@ -66,7 +66,7 @@ pub(crate) mod nonblocking {
     use super::*;
     use crate::range_client::AsyncHttpRangeClient;
 
-    /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential requests
+    /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential reading
     pub struct AsyncBufferedHttpRangeClient<T: AsyncHttpRangeClient> {
         http_client: T,
         url: String,
@@ -155,7 +155,7 @@ pub(crate) mod sync {
     use bytes::Buf;
     use std::io::{Read, Seek, SeekFrom};
 
-    /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential requests
+    /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential reading
     pub struct SyncBufferedHttpRangeClient<T: SyncHttpRangeClient> {
         http_client: T,
         url: String,
@@ -226,7 +226,6 @@ pub(crate) mod sync {
                     }
                     e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
                 })?;
-            // TODO: return  for HTTP status 416
             bytes.copy_to_slice(&mut buf[0..bytes.len()]);
             Ok(length)
         }

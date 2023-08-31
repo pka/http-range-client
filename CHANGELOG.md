@@ -1,3 +1,8 @@
+## (UNRELEASED)
+
+* Add ureq client support
+* Return UnexpectedEof when read() causes HTTP error 416
+
 ## 0.7.0 (2023-08-31)
 
 * Add sync API with blocking::reqwest

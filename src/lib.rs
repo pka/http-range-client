@@ -1,4 +1,4 @@
-//! HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+//! HTTP client for HTTP Range requests with a buffer optimized for sequential reading.
 
 //! ## Usage example
 //!

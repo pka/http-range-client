@@ -25,7 +25,7 @@ pub(crate) mod sync {
         }
     }
 
-    /// Sync HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+    /// Sync HTTP client for HTTP Range requests with a buffer optimized for sequential reading.
     pub type UreqHttpReader = crate::SyncBufferedHttpRangeClient<ureq::Agent>;
 
     impl UreqHttpReader {

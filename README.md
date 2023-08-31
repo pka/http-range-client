@@ -4,11 +4,11 @@
 [![crates.io version](https://img.shields.io/crates/v/http-range-client.svg)](https://crates.io/crates/http-range-client)
 [![docs.rs docs](https://docs.rs/http-range-client/badge.svg)](https://docs.rs/http-range-client)
 
-HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
+HTTP client for HTTP Range requests with a buffer optimized for sequential reading.
 
 Implements Seek+Read for blocking clients, which makes it a drop-in replacement for local files.
 
-Usage examples:
+## Usage examples
 
     use http_range_client::*;
 
@@ -23,3 +23,13 @@ Usage examples:
     let mut bytes = [0; 3];
     reader.read_exact(&mut bytes)?;
     assert_eq!(&bytes, b"PNG");
+
+## Supported HTTP clients (feature flag)
+
+* [reqwest](https://crates.io/crates/reqwest) async (`reqwest-async`, default)
+* [reqwest](https://crates.io/crates/reqwest) blocking (`reqwest-sync`, default):
+  Not supported on Wasm target
+* [ureq](https://crates.io/crates/ureq) blocking (`ureq-sync`):
+  Supports native and Wasm target
+
+Other clients can be used via the `AsyncBufferedHttpRangeClient` resp. `SyncBufferedHttpRangeClient` adapter, after implementing the `AsyncHttpRangeClient` resp. `SyncHttpRangeClient` trait.
