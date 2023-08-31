@@ -16,16 +16,16 @@ reqwest-async = ["reqwest"]
 reqwest-sync = ["reqwest/blocking"]
 
 [dependencies]
-byteorder = "1.4.2"
-reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
-bytes = { version = "1.0.1" }
-thiserror = "1.0"
-log = "0.4.13"
 async-trait = "0.1.51"
+byteorder = "1.4.2"
+bytes = "1.0.1"
+log = "0.4.13"
+reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
+thiserror = "1.0"
 
 [dev-dependencies]
-tokio = { version = "1.0.2", default-features = false, features = ["rt-multi-thread", "macros"] }
 env_logger = "0.10.0"
+tokio = { version = "1.0.2", default-features = false, features = ["rt-multi-thread", "macros"] }
 
 [package.metadata.docs.rs]
 all-features = true
