@@ -1,4 +1,4 @@
-## 0.7.0 (UNRELEASED)
+## 0.7.0 (2023-08-31)
 
 * Add sync API with blocking::reqwest
 * Implement Seek+Read for sync reader
