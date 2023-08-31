@@ -18,9 +18,8 @@ Usage examples:
     let version = client.get_bytes(1).await?; // From buffer - no HTTP request!
     assert_eq!(version, [3]);
 
-    let mut client =
-        HttpReader::new("https://www.rust-lang.org/static/images/favicon-32x32.png");
-    client.seek(SeekFrom::Start(1)).ok();
+    let mut reader = HttpReader::new("https://www.rust-lang.org/static/images/favicon-32x32.png");
+    reader.seek(SeekFrom::Start(1)).ok();
     let mut bytes = [0; 3];
-    client.read_exact(&mut bytes)?;
+    reader.read_exact(&mut bytes)?;
     assert_eq!(&bytes, b"PNG");

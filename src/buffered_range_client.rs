@@ -358,14 +358,14 @@ mod test_sync {
     #[test]
     fn io_read() -> std::io::Result<()> {
         init_logger();
-        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
-        client.seek(SeekFrom::Start(3)).ok();
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+        reader.seek(SeekFrom::Start(3)).ok();
         let mut version = [0; 1];
-        client.min_req_size(256).read_exact(&mut version)?;
+        reader.min_req_size(256).read_exact(&mut version)?;
         assert_eq!(version, [3]);
 
         let mut bytes = [0; 3];
-        client.read_exact(&mut bytes)?;
+        reader.read_exact(&mut bytes)?;
         assert_eq!(&bytes, b"fgb");
         Ok(())
     }
@@ -373,9 +373,9 @@ mod test_sync {
     #[test]
     fn io_read_over_min_req_size() -> std::io::Result<()> {
         init_logger();
-        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         let mut bytes = [0; 8];
-        client.min_req_size(4).read_exact(&mut bytes)?;
+        reader.min_req_size(4).read_exact(&mut bytes)?;
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
         Ok(())
     }
@@ -383,10 +383,10 @@ mod test_sync {
     #[test]
     fn io_read_non_exact() -> std::io::Result<()> {
         init_logger();
-        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         let mut bytes = [0; 8];
         // We could only read 4 bytes in this case
-        client.min_req_size(4).read(&mut bytes)?;
+        reader.min_req_size(4).read(&mut bytes)?;
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
         Ok(())
     }
@@ -395,18 +395,18 @@ mod test_sync {
     fn after_end() -> std::io::Result<()> {
         init_logger();
         // countries.fgb has 205680 bytes
-        let mut client = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
-        client.seek(SeekFrom::Start(205670)).ok();
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+        reader.seek(SeekFrom::Start(205670)).ok();
         let mut bytes = [0; 10];
-        client.read_exact(&mut bytes)?;
+        reader.read_exact(&mut bytes)?;
         assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
 
-        let result = client.read_exact(&mut bytes);
+        let result = reader.read_exact(&mut bytes);
         assert_eq!(result.unwrap_err().to_string(), "http status 416");
 
-        client.seek(SeekFrom::Start(205670)).ok();
+        reader.seek(SeekFrom::Start(205670)).ok();
         let mut bytes = [0; 20];
-        client.read_exact(&mut bytes)?;
+        reader.read_exact(&mut bytes)?;
         assert_eq!(
             bytes,
             [78, 192, 205, 204, 204, 204, 204, 236, 73, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -418,11 +418,11 @@ mod test_sync {
     #[test]
     fn remote_png() -> std::io::Result<()> {
         init_logger();
-        let mut client =
+        let mut reader =
             HttpReader::new("https://www.rust-lang.org/static/images/favicon-32x32.png");
-        client.seek(SeekFrom::Start(1)).ok();
+        reader.seek(SeekFrom::Start(1)).ok();
         let mut bytes = [0; 3];
-        client.read_exact(&mut bytes)?;
+        reader.read_exact(&mut bytes)?;
         assert_eq!(&bytes, b"PNG");
         Ok(())
     }
