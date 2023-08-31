@@ -1,5 +1,9 @@
 # http-range-client
 
+[![CI build](https://github.com/pka/http-range-client/workflows/CI/badge.svg)](https://github.com/pka/http-range-client/actions)
+[![crates.io version](https://img.shields.io/crates/v/http-range-client.svg)](https://crates.io/crates/http-range-client)
+[![docs.rs docs](https://docs.rs/http-range-client/badge.svg)](https://docs.rs/http-range-client)
+
 HTTP client for HTTP Range requests with a buffer optimized for sequential requests.
 
 Implements Seek+Read for blocking clients, which makes it a drop-in replacement for local files.
