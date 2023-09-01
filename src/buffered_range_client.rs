@@ -210,14 +210,12 @@ pub(crate) mod sync {
     impl<T: SyncHttpRangeClient> Read for SyncBufferedHttpRangeClient<T> {
         fn read(&mut self, buf: &mut [u8]) -> std::result::Result<usize, std::io::Error> {
             let length = buf.len();
-            let mut bytes = self
-                .get_range(self.buffer.offset, length)
-                .map_err(|e| match e {
-                    HttpError::HttpStatus(416) => {
-                        std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
-                    }
-                    e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-                })?;
+            let mut bytes = self.get_bytes(length).map_err(|e| match e {
+                HttpError::HttpStatus(416) => {
+                    std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
+                }
+                e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+            })?;
             bytes.copy_to_slice(&mut buf[0..bytes.len()]);
             Ok(length)
         }
@@ -230,9 +228,11 @@ pub(crate) mod sync {
                     self.buffer.offset = p as usize;
                     Ok(p)
                 }
+                // TODO: we should support SeekFrom::End (e.g. for Parquet)
+                // With a HEAD request we would often get the file length
                 SeekFrom::End(_) => Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    "Request size unkonwn",
+                    "SeekFrom::End not supported for HTTP streams",
                 )),
                 SeekFrom::Current(p) => {
                     self.buffer.offset = self.buffer.offset.saturating_add_signed(p as isize);
