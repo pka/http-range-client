@@ -12,6 +12,7 @@ struct HttpRangeBuffer {
     offset: usize,
     /// Lower index of buffer relative to input stream
     head: usize,
+    stats: stats::RequestStats,
 }
 
 impl HttpRangeBuffer {
@@ -21,6 +22,7 @@ impl HttpRangeBuffer {
             min_req_size: 1024,
             offset: 0,
             head: 0,
+            stats: stats::RequestStats::default(),
         }
     }
 
@@ -60,6 +62,12 @@ impl HttpRangeBuffer {
             None
         }
     }
+
+    fn range(&mut self, begin: usize, length: usize) -> String {
+        let range = format!("bytes={begin}-{}", begin + length - 1);
+        self.stats.log_get_range(begin, length, &range);
+        range
+    }
 }
 
 pub(crate) mod nonblocking {
@@ -71,7 +79,6 @@ pub(crate) mod nonblocking {
         http_client: T,
         url: String,
         buffer: HttpRangeBuffer,
-        stats: stats::RequestStats,
     }
 
     impl<T: AsyncHttpRangeClient> AsyncBufferedHttpRangeClient<T> {
@@ -80,7 +87,6 @@ pub(crate) mod nonblocking {
                 http_client,
                 url: url.to_string(),
                 buffer: HttpRangeBuffer::new(),
-                stats: stats::RequestStats::default(),
             }
         }
 
@@ -95,18 +101,12 @@ pub(crate) mod nonblocking {
             self
         }
 
-        fn range(&mut self, begin: usize, length: usize) -> String {
-            let range = format!("bytes={begin}-{}", begin + length - 1);
-            self.stats.log_get_range(begin, length, &range);
-            range
-        }
-
         /// Get `length` bytes with offset `begin`.
         pub async fn get_range(&mut self, begin: usize, length: usize) -> Result<&[u8]> {
             let slice_len = if let Some((range_begin, range_length)) =
                 self.buffer.get_request_range(begin, length)
             {
-                let range = self.range(range_begin, range_length);
+                let range = self.buffer.range(range_begin, range_length);
                 let bytes = self.http_client.get_range(&self.url, &range).await?;
                 let len = bytes.len();
                 self.buffer.buf.put(bytes);
@@ -160,7 +160,6 @@ pub(crate) mod sync {
         http_client: T,
         url: String,
         buffer: HttpRangeBuffer,
-        stats: stats::RequestStats,
     }
 
     impl<T: SyncHttpRangeClient> SyncBufferedHttpRangeClient<T> {
@@ -169,7 +168,6 @@ pub(crate) mod sync {
                 http_client,
                 url: url.to_string(),
                 buffer: HttpRangeBuffer::new(),
-                stats: stats::RequestStats::default(),
             }
         }
 
@@ -184,18 +182,12 @@ pub(crate) mod sync {
             self
         }
 
-        fn range(&mut self, begin: usize, length: usize) -> String {
-            let range = format!("bytes={begin}-{}", begin + length - 1);
-            self.stats.log_get_range(begin, length, &range);
-            range
-        }
-
         /// Get `length` bytes with offset `begin`.
         pub fn get_range(&mut self, begin: usize, length: usize) -> Result<&[u8]> {
             let slice_len = if let Some((range_begin, range_length)) =
                 self.buffer.get_request_range(begin, length)
             {
-                let range = self.range(range_begin, range_length);
+                let range = self.buffer.range(range_begin, range_length);
                 let bytes = self.http_client.get_range(&self.url, &range)?;
                 let len = bytes.len();
                 self.buffer.buf.put(bytes);
