@@ -107,12 +107,14 @@ pub(crate) mod nonblocking {
             let slice_len = if let Some((range_begin, range_length)) =
                 self.buffer.get_request_range(begin, length)
             {
-                self.buffer.http_stats.log(begin, range_length, length);
+                self.buffer
+                    .http_stats
+                    .log(range_begin, range_length, length);
                 let range = self.buffer.range(range_begin, range_length);
                 let bytes = self.http_client.get_range(&self.url, &range).await?;
-                let len = bytes.len();
+                let eff_len = bytes.len();
                 self.buffer.buf.put(bytes);
-                min(len, length)
+                min(range_begin - begin + eff_len, length)
             } else {
                 length
             };
@@ -173,9 +175,9 @@ pub(crate) mod sync {
                 self.buffer.http_stats.log(begin, range_length, length);
                 let range = self.buffer.range(range_begin, range_length);
                 let bytes = self.http_client.get_range(&self.url, &range)?;
-                let len = bytes.len();
+                let eff_len = bytes.len();
                 self.buffer.buf.put(bytes);
-                min(len, length)
+                min(range_begin - begin + eff_len, length)
             } else {
                 length
             };
@@ -310,6 +312,20 @@ mod test_async {
         let bytes = client.get_range(205670, 20).await?;
         assert_eq!(bytes, [78, 192, 205, 204, 204, 204, 204, 236, 73, 192]);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn buffer_overlap() -> Result<()> {
+        init_logger();
+        let mut client =
+            BufferedHttpRangeClient::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let bytes = client.min_req_size(4).get_range(0, 3).await?;
+        assert_eq!(bytes, [b'f', b'g', b'b']);
+        let bytes = client.get_range(3, 4).await?;
+        assert_eq!(bytes, [3, b'f', b'g', b'b']);
+        let bytes = client.get_bytes(1).await?;
+        assert_eq!(bytes, [0]);
         Ok(())
     }
 
