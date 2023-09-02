@@ -7,7 +7,7 @@ description = "HTTP client for HTTP Range requests with a buffer optimized for s
 homepage = "https://github.com/pka/http-range-client"
 repository = "https://github.com/pka/http-range-client"
 readme = "README.md"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 keywords = ["http", "reader", "buffer"]
 
 [features]
@@ -20,7 +20,7 @@ ureq-sync = ["ureq"]
 async-trait = "0.1.51"
 byteorder = "1.4.2"
 bytes = "1.0.1"
-log = "0.4.13"
+read-logger = "0.1.0"
 reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
 thiserror = "1.0"
 ureq = { version = "2.7.1", optional = true }

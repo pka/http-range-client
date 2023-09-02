@@ -1,6 +1,6 @@
 use crate::error::Result;
 use bytes::{BufMut, BytesMut};
-use log::{debug, trace};
+use read_logger::{Level, ReadStatsLogger};
 use std::cmp::{max, min};
 use std::str;
 
@@ -12,7 +12,8 @@ struct HttpRangeBuffer {
     offset: usize,
     /// Lower index of buffer relative to input stream
     head: usize,
-    stats: stats::RequestStats,
+    read_stats: ReadStatsLogger,
+    http_stats: ReadStatsLogger,
 }
 
 impl HttpRangeBuffer {
@@ -22,7 +23,8 @@ impl HttpRangeBuffer {
             min_req_size: 1024,
             offset: 0,
             head: 0,
-            stats: stats::RequestStats::default(),
+            read_stats: ReadStatsLogger::new(Level::Trace, "read"),
+            http_stats: ReadStatsLogger::new(Level::Debug, "http-range"),
         }
     }
 
@@ -42,7 +44,7 @@ impl HttpRangeBuffer {
         //                    +---+
         //                    length
 
-        trace!("read begin: {begin}, Length: {length}");
+        self.read_stats.log(begin, length, length);
         // Download additional bytes if requested range is not in buffer
         if begin + length > self.tail() || begin < self.head {
             // Remove bytes before new begin
@@ -64,9 +66,8 @@ impl HttpRangeBuffer {
     }
 
     fn range(&mut self, begin: usize, length: usize) -> String {
-        let range = format!("bytes={begin}-{}", begin + length - 1);
-        self.stats.log_get_range(begin, length, &range);
-        range
+        let end = (begin + length).saturating_sub(1);
+        format!("bytes={begin}-{end}")
     }
 }
 
@@ -106,6 +107,7 @@ pub(crate) mod nonblocking {
             let slice_len = if let Some((range_begin, range_length)) =
                 self.buffer.get_request_range(begin, length)
             {
+                self.buffer.http_stats.log(begin, range_length, length);
                 let range = self.buffer.range(range_begin, range_length);
                 let bytes = self.http_client.get_range(&self.url, &range).await?;
                 let len = bytes.len();
@@ -123,27 +125,6 @@ pub(crate) mod nonblocking {
         /// Get `length` bytes from current offset.
         pub async fn get_bytes(&mut self, length: usize) -> Result<&[u8]> {
             self.get_range(self.buffer.offset, length).await
-        }
-    }
-}
-
-pub(crate) mod stats {
-    use super::*;
-
-    #[derive(Default)]
-    pub(crate) struct RequestStats {
-        requests_ever_made: usize,
-        bytes_ever_requested: usize,
-    }
-
-    impl RequestStats {
-        pub fn log_get_range(&mut self, _begin: usize, length: usize, range: &str) {
-            self.requests_ever_made += 1;
-            self.bytes_ever_requested += length;
-            debug!(
-                "request: #{}, bytes: (this_request: {length}, ever: {}), Range: {range}",
-                self.requests_ever_made, self.bytes_ever_requested,
-            );
         }
     }
 }
@@ -187,6 +168,7 @@ pub(crate) mod sync {
             let slice_len = if let Some((range_begin, range_length)) =
                 self.buffer.get_request_range(begin, length)
             {
+                self.buffer.http_stats.log(begin, range_length, length);
                 let range = self.buffer.range(range_begin, range_length);
                 let bytes = self.http_client.get_range(&self.url, &range)?;
                 let len = bytes.len();
