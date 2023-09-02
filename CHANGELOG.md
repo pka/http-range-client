@@ -1,7 +1,9 @@
-## (UNRELEASED)
+## 0.7.1 (2023-09-02)
 
 * Add ureq client support
 * Return UnexpectedEof when read() causes HTTP error 416
+* Support SeekFrom::End by sending a HEAD request
+* Fix overlapping buffer request
 
 ## 0.7.0 (2023-08-31)
 
