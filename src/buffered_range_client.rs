@@ -2,7 +2,7 @@ use crate::error::Result;
 use bytes::{BufMut, BytesMut};
 use read_logger::{Level, ReadStatsLogger};
 use std::cmp::{max, min};
-use std::str;
+use std::str::{self, FromStr};
 
 /// Buffer for Range request reader (https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests)
 struct HttpRangeBuffer {
@@ -141,6 +141,7 @@ pub(crate) mod sync {
         http_client: T,
         url: String,
         buffer: HttpRangeBuffer,
+        length_info: Option<Option<u64>>,
     }
 
     impl<T: SyncHttpRangeClient> SyncBufferedHttpRangeClient<T> {
@@ -149,6 +150,7 @@ pub(crate) mod sync {
                 http_client,
                 url: url.to_string(),
                 buffer: HttpRangeBuffer::new(),
+                length_info: None,
             }
         }
 
@@ -210,12 +212,40 @@ pub(crate) mod sync {
                     self.buffer.offset = p as usize;
                     Ok(p)
                 }
-                // TODO: we should support SeekFrom::End (e.g. for Parquet)
-                // With a HEAD request we would often get the file length
-                SeekFrom::End(_) => Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "SeekFrom::End not supported for HTTP streams",
-                )),
+                SeekFrom::End(p) => {
+                    if self.length_info.is_none() {
+                        // Get content-length with HEAD request
+                        let header_val = self
+                            .http_client
+                            .head_response_header(&self.url, "content-length")
+                            .map_err(|e| match e {
+                                HttpError::HttpStatus(416) => {
+                                    std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
+                                }
+                                e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                            })?;
+                        self.length_info = if let Some(val) = header_val {
+                            let length = u64::from_str(&val).map_err(|_| {
+                                std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    "SeekFrom::End failed - invalid content-length received",
+                                )
+                            })?;
+                            Some(Some(length))
+                        } else {
+                            Some(None)
+                        };
+                    }
+                    if let Some(Some(length)) = self.length_info {
+                        self.buffer.offset = length.saturating_add_signed(p) as usize;
+                        Ok(self.buffer.offset as u64)
+                    } else {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "SeekFrom::End failed - no content-length received",
+                        ))
+                    }
+                }
                 SeekFrom::Current(p) => {
                     self.buffer.offset = self.buffer.offset.saturating_add_signed(p as isize);
                     Ok(self.buffer.offset as u64)
@@ -394,6 +424,39 @@ mod test_sync {
             bytes,
             [78, 192, 205, 204, 204, 204, 204, 236, 73, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn seek_current() -> std::io::Result<()> {
+        init_logger();
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+        let mut bytes = [0; 8];
+        reader.read(&mut bytes)?;
+
+        assert_eq!(reader.seek(SeekFrom::Current(0))?, 8);
+
+        reader.seek(SeekFrom::Current(-8))?;
+        reader.read(&mut bytes)?;
+        assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn seek_end() -> std::io::Result<()> {
+        init_logger();
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+
+        let size = reader.seek(SeekFrom::End(0))?;
+        assert_eq!(size, 205680);
+
+        reader.seek(SeekFrom::End(-205680))?;
+
+        let mut bytes = [0; 8];
+        reader.read(&mut bytes)?;
+        assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
 
         Ok(())
     }

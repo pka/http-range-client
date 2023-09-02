@@ -20,6 +20,17 @@ pub(crate) mod nonblocking {
                 .await
                 .map_err(|e| HttpError::HttpError(e.to_string()))
         }
+        async fn head_response_header(&self, url: &str, header: &str) -> Result<Option<String>> {
+            let response = self.head(url).send().await?;
+            if let Some(val) = response.headers().get(header) {
+                let v = val
+                    .to_str()
+                    .map_err(|e| HttpError::HttpError(e.to_string()))?;
+                Ok(Some(v.to_string()))
+            } else {
+                Ok(None)
+            }
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -34,6 +45,17 @@ pub(crate) mod nonblocking {
                 .bytes()
                 .await
                 .map_err(|e| HttpError::HttpError(e.to_string()))
+        }
+        async fn head_response_header(&self, url: &str, header: &str) -> Result<Option<String>> {
+            let response = self.head(url).send().await?;
+            if let Some(val) = response.headers().get(header) {
+                let v = val
+                    .to_str()
+                    .map_err(|e| HttpError::HttpError(e.to_string()))?;
+                Ok(Some(v.to_string()))
+            } else {
+                Ok(None)
+            }
         }
     }
 
@@ -61,6 +83,17 @@ pub(crate) mod sync {
             response
                 .bytes()
                 .map_err(|e| HttpError::HttpError(e.to_string()))
+        }
+        fn head_response_header(&self, url: &str, header: &str) -> Result<Option<String>> {
+            let response = self.head(url).send()?;
+            if let Some(val) = response.headers().get(header) {
+                let v = val
+                    .to_str()
+                    .map_err(|e| HttpError::HttpError(e.to_string()))?;
+                Ok(Some(v.to_string()))
+            } else {
+                Ok(None)
+            }
         }
     }
 

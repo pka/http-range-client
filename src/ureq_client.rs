@@ -19,6 +19,10 @@ pub(crate) mod sync {
             let bytes = response.into_reader().bytes().map_while(|val| val.ok());
             Ok(Bytes::from_iter(bytes))
         }
+        fn head_response_header(&self, url: &str, header: &str) -> Result<Option<String>> {
+            let response = self.head(url).call()?;
+            Ok(response.header(header).map(|val| val.to_string()))
+        }
     }
 
     /// Sync HTTP client for HTTP Range requests with a buffer optimized for sequential reading.
