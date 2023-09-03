@@ -42,6 +42,8 @@
 
 mod buffered_range_client;
 mod error;
+#[cfg(feature = "parquet")]
+mod parquet;
 mod range_client;
 #[cfg(any(feature = "reqwest-async", feature = "reqwest-sync"))]
 mod reqwest_client;

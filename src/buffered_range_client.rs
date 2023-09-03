@@ -5,6 +5,7 @@ use std::cmp::{max, min};
 use std::str::{self, FromStr};
 
 /// Buffer for Range request reader (https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests)
+#[derive(Clone)]
 struct HttpRangeBuffer {
     buf: BytesMut,
     min_req_size: usize,
@@ -146,14 +147,15 @@ pub(crate) mod sync {
     use std::io::{Read, Seek, SeekFrom};
 
     /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential reading
-    pub struct SyncBufferedHttpRangeClient<T: SyncHttpRangeClient> {
+    #[derive(Clone)]
+    pub struct SyncBufferedHttpRangeClient<T: SyncHttpRangeClient + Clone> {
         http_client: T,
         url: String,
         buffer: HttpRangeBuffer,
-        length_info: Option<Option<u64>>,
+        pub(crate) length_info: Option<Option<u64>>,
     }
 
-    impl<T: SyncHttpRangeClient> SyncBufferedHttpRangeClient<T> {
+    impl<T: SyncHttpRangeClient + Clone> SyncBufferedHttpRangeClient<T> {
         pub fn with(http_client: T, url: &str) -> SyncBufferedHttpRangeClient<T> {
             SyncBufferedHttpRangeClient {
                 http_client,
@@ -230,7 +232,7 @@ pub(crate) mod sync {
         }
     }
 
-    impl<T: SyncHttpRangeClient> Read for SyncBufferedHttpRangeClient<T> {
+    impl<T: SyncHttpRangeClient + Clone> Read for SyncBufferedHttpRangeClient<T> {
         fn read(&mut self, buf: &mut [u8]) -> std::result::Result<usize, std::io::Error> {
             let length = buf.len();
             let mut bytes = self.get_bytes(length).map_err(|e| match e {
@@ -244,7 +246,7 @@ pub(crate) mod sync {
         }
     }
 
-    impl<T: SyncHttpRangeClient> Seek for SyncBufferedHttpRangeClient<T> {
+    impl<T: SyncHttpRangeClient + Clone> Seek for SyncBufferedHttpRangeClient<T> {
         fn seek(&mut self, pos: SeekFrom) -> std::result::Result<u64, std::io::Error> {
             match pos {
                 SeekFrom::Start(p) => {

@@ -15,11 +15,13 @@ default = ["reqwest-async", "reqwest-sync"]
 reqwest-async = ["reqwest"]
 reqwest-sync = ["reqwest/blocking"]
 ureq-sync = ["ureq"]
+parquet = ["dep:parquet"]
 
 [dependencies]
 async-trait = "0.1.51"
 byteorder = "1.4.2"
 bytes = "1.0.1"
+parquet = { version = "46.0.0", optional = true }
 read-logger = "0.2.0"
 reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
 thiserror = "1.0"
@@ -28,6 +30,9 @@ ureq = { version = "2.7.1", optional = true }
 [dev-dependencies]
 env_logger = "0.10.0"
 tokio = { version = "1.0.2", default-features = false, features = ["rt-multi-thread", "macros"] }
+
+[patch.crates-io]
+read-logger = { path = "../read-logger" }
 
 [package.metadata.docs.rs]
 all-features = true
