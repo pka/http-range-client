@@ -128,6 +128,13 @@ pub(crate) mod nonblocking {
         pub async fn get_bytes(&mut self, length: usize) -> Result<&[u8]> {
             self.get_range(self.buffer.offset, length).await
         }
+
+        /// Send a HEAD request and return response header value
+        pub async fn head_response_header(&self, header: &str) -> Result<Option<String>> {
+            self.http_client
+                .head_response_header(&self.url, header)
+                .await
+        }
     }
 }
 
@@ -191,6 +198,36 @@ pub(crate) mod sync {
         pub fn get_bytes(&mut self, length: usize) -> Result<&[u8]> {
             self.get_range(self.buffer.offset, length)
         }
+
+        /// Send a HEAD request and return response header value
+        pub fn head_response_header(&self, header: &str) -> Result<Option<String>> {
+            self.http_client.head_response_header(&self.url, header)
+        }
+
+        /// Send a HEAD request and get content-length
+        pub fn get_content_length(&mut self) -> std::result::Result<Option<u64>, std::io::Error> {
+            let header_val = self
+                .head_response_header("content-length")
+                .map_err(|e| match e {
+                    HttpError::HttpStatus(416) => {
+                        std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
+                    }
+                    e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                })?;
+            let length_info = if let Some(val) = header_val {
+                let length = u64::from_str(&val).map_err(|_| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Invalid content-length received",
+                    )
+                })?;
+                Some(length)
+            } else {
+                None
+            };
+            self.length_info = Some(length_info);
+            Ok(length_info)
+        }
     }
 
     impl<T: SyncHttpRangeClient> Read for SyncBufferedHttpRangeClient<T> {
@@ -216,27 +253,8 @@ pub(crate) mod sync {
                 }
                 SeekFrom::End(p) => {
                     if self.length_info.is_none() {
-                        // Get content-length with HEAD request
-                        let header_val = self
-                            .http_client
-                            .head_response_header(&self.url, "content-length")
-                            .map_err(|e| match e {
-                                HttpError::HttpStatus(416) => {
-                                    std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
-                                }
-                                e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-                            })?;
-                        self.length_info = if let Some(val) = header_val {
-                            let length = u64::from_str(&val).map_err(|_| {
-                                std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    "SeekFrom::End failed - invalid content-length received",
-                                )
-                            })?;
-                            Some(Some(length))
-                        } else {
-                            Some(None)
-                        };
+                        // Read content-length with HEAD request
+                        let _ = self.get_content_length()?;
                     }
                     if let Some(Some(length)) = self.length_info {
                         self.buffer.offset = length.saturating_add_signed(p) as usize;
