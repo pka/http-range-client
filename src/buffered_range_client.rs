@@ -205,21 +205,11 @@ pub(crate) mod sync {
         }
 
         /// Send a HEAD request and get content-length
-        pub fn get_content_length(&mut self) -> std::result::Result<Option<u64>, std::io::Error> {
-            let header_val = self
-                .head_response_header("content-length")
-                .map_err(|e| match e {
-                    HttpError::HttpStatus(416) => {
-                        std::io::Error::from(std::io::ErrorKind::UnexpectedEof)
-                    }
-                    e => std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-                })?;
+        pub fn get_content_length(&mut self) -> Result<Option<u64>> {
+            let header_val = self.head_response_header("content-length")?;
             let length_info = if let Some(val) = header_val {
                 let length = u64::from_str(&val).map_err(|_| {
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Invalid content-length received",
-                    )
+                    HttpError::HttpError("Invalid content-length received".to_string())
                 })?;
                 Some(length)
             } else {
@@ -247,7 +237,7 @@ pub(crate) mod sync {
     impl<T: SyncHttpRangeClient> BufRead for SyncBufferedHttpRangeClient<T> {
         fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
             if self.buffer.offset >= self.buffer.tail() || self.buffer.offset < self.buffer.head {
-                let res = self.get_range(self.buffer.offset, self.buffer.min_req_size);
+                let res = self.get_bytes(self.buffer.min_req_size);
                 if let Some(HttpError::HttpStatus(416)) = res.as_ref().err() {
                     // An empty buffer indicates that the stream has reached EOF
                     return Ok(&[]);
@@ -273,7 +263,9 @@ pub(crate) mod sync {
                 SeekFrom::End(p) => {
                     if self.length_info.is_none() {
                         // Read content-length with HEAD request
-                        let _ = self.get_content_length()?;
+                        let _ = self.get_content_length().map_err(|e| {
+                            std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+                        })?;
                     }
                     if let Some(Some(length)) = self.length_info {
                         self.buffer.offset = length.saturating_add_signed(p) as usize;
