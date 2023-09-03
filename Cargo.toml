@@ -15,11 +15,13 @@ default = ["reqwest-async", "reqwest-sync"]
 reqwest-async = ["reqwest"]
 reqwest-sync = ["reqwest/blocking"]
 ureq-sync = ["ureq"]
+polars = ["ureq", "polars-io"]
 
 [dependencies]
 async-trait = "0.1.51"
 byteorder = "1.4.2"
 bytes = "1.0.1"
+polars-io = { version = "0.32.1", features = ["parquet", "csv"], optional = true }
 read-logger = "0.2.0"
 reqwest = { version = "0.11.0", default-features = false, features = ["default-tls"], optional = true }
 thiserror = "1.0"
