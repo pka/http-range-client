@@ -143,7 +143,7 @@ pub(crate) mod sync {
     use crate::range_client::SyncHttpRangeClient;
     use crate::HttpError;
     use bytes::Buf;
-    use std::io::{Read, Seek, SeekFrom};
+    use std::io::{BufRead, Read, Seek, SeekFrom};
 
     /// HTTP client adapter for HTTP Range requests with a buffer optimized for sequential reading
     pub struct SyncBufferedHttpRangeClient<T: SyncHttpRangeClient> {
@@ -241,6 +241,25 @@ pub(crate) mod sync {
             })?;
             bytes.copy_to_slice(&mut buf[0..bytes.len()]);
             Ok(length)
+        }
+    }
+
+    impl<T: SyncHttpRangeClient> BufRead for SyncBufferedHttpRangeClient<T> {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            if self.buffer.offset >= self.buffer.tail() || self.buffer.offset < self.buffer.head {
+                let res = self.get_range(self.buffer.offset, self.buffer.min_req_size);
+                if let Some(HttpError::HttpStatus(416)) = res.as_ref().err() {
+                    // An empty buffer indicates that the stream has reached EOF
+                    return Ok(&[]);
+                }
+                res.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                self.buffer.offset = self.buffer.head;
+            }
+            Ok(&self.buffer.buf[..])
+        }
+
+        fn consume(&mut self, amt: usize) {
+            self.buffer.offset += amt;
         }
     }
 
@@ -372,7 +391,7 @@ mod test_sync {
     use crate::Result;
     #[cfg(all(feature = "ureq-sync", not(feature = "reqwest-sync")))]
     use crate::UreqHttpReader as HttpReader;
-    use std::io::{Read, Seek, SeekFrom};
+    use std::io::{BufRead, Read, Seek, SeekFrom};
 
     fn init_logger() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -490,6 +509,19 @@ mod test_sync {
 
         let mut bytes = [0; 8];
         reader.read(&mut bytes)?;
+        assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn bufread() -> std::io::Result<()> {
+        init_logger();
+        let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
+        reader.set_min_req_size(5);
+        let mut bytes = vec![];
+        let num_bytes = reader.read_until(0, &mut bytes).unwrap();
+        assert_eq!(num_bytes, 8);
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
 
         Ok(())
