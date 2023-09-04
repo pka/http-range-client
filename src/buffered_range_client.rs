@@ -511,10 +511,38 @@ mod test_sync {
         init_logger();
         let mut reader = HttpReader::new("https://flatgeobuf.org/test/data/countries.fgb");
         reader.set_min_req_size(5);
+
         let mut bytes = vec![];
         let num_bytes = reader.read_until(0, &mut bytes).unwrap();
         assert_eq!(num_bytes, 8);
         assert_eq!(bytes, [b'f', b'g', b'b', 3, b'f', b'g', b'b', 0]);
+
+        // Mix with seek+read
+        reader.seek(SeekFrom::Start(0)).ok();
+        let mut bytes = vec![];
+        let _num_bytes = reader.read_until(3, &mut bytes).unwrap();
+        assert_eq!(bytes, [b'f', b'g', b'b', 3]);
+        let mut bytes = [0; 2];
+        reader.read(&mut bytes)?;
+        assert_eq!(bytes, [b'f', b'g']);
+        let mut bytes = vec![];
+        let _num_bytes = reader.read_until(0, &mut bytes).unwrap();
+        assert_eq!(bytes, [b'f', b'g', b'b', 0]);
+        // ? should it be
+        // assert_eq!(bytes, [b'b', 0]);
+
+        // Test EOF
+        reader.seek(SeekFrom::Start(205680 - 8)).ok();
+        let mut bytes = vec![];
+        let num_bytes = reader.read_until(0, &mut bytes).unwrap();
+        assert_eq!(num_bytes, 8);
+        assert_eq!(bytes, [205, 204, 204, 204, 204, 236, 73, 192]);
+
+        reader.seek(SeekFrom::Start(205680 - 5)).ok();
+        let mut bytes = vec![];
+        let num_bytes = reader.read_until(0, &mut bytes).unwrap();
+        assert_eq!(num_bytes, 5);
+        assert_eq!(bytes, [204, 204, 236, 73, 192]);
 
         Ok(())
     }
