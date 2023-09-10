@@ -1,3 +1,8 @@
+## 0.7.2 (2023-09-10)
+
+* Add head_response_header to public API
+* Impl BufRead for SyncBufferedHttpRangeClient
+
 ## 0.7.1 (2023-09-02)
 
 * Add ureq client support
