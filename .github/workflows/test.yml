@@ -6,21 +6,21 @@ jobs:
   build_and_check:
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - wasm32-unknown-unknown
+        config:
+          - { target: x86_64-unknown-linux-gnu, features: "reqwest-async,ureq-sync" }
+          - { target: wasm32-unknown-unknown, features: "reqwest-async" }
 
-    name: Build Check ${{ matrix.target }}
+    name: Build Check ${{ matrix.config.target }}
     runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v2
 
-      - name: Install ${{ matrix.target }}
+      - name: Install ${{ matrix.config.target }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.target }}
+          target: ${{ matrix.config.target }}
           profile: minimal
           override: true
 
@@ -28,7 +28,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --target ${{matrix.target}} --no-default-features --features=reqwest-async,ureq-sync
+          args: --target ${{matrix.config.target}} --no-default-features --features=${{matrix.config.features}}
 
   test:
     strategy:
