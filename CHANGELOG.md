@@ -1,3 +1,7 @@
+## 0.8.0 (2024-08-12)
+
+* Update reqwest to 0.12
+
 ## 0.7.2 (2023-09-10)
 
 * Add head_response_header to public API

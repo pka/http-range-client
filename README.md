@@ -30,6 +30,6 @@ Implements Seek+Read for blocking clients, which makes it a drop-in replacement 
 * [reqwest](https://crates.io/crates/reqwest) blocking (`reqwest-sync`, default):
   Not supported on Wasm target
 * [ureq](https://crates.io/crates/ureq) blocking (`ureq-sync`):
-  Supports native and Wasm target
+  Not supported on Wasm target
 
 Other clients can be used via the `AsyncBufferedHttpRangeClient` resp. `SyncBufferedHttpRangeClient` adapter, after implementing the `AsyncHttpRangeClient` resp. `SyncHttpRangeClient` trait.

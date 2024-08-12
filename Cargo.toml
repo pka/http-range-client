@@ -1,6 +1,6 @@
 [package]
 name = "http-range-client"
-version = "0.7.2"
+version = "0.8.0"
 edition = "2018"
 authors = ["Pirmin Kalberer <pka@sourcepole.ch>"]
 description = "HTTP client for HTTP Range requests with a buffer optimized for sequential requests."
