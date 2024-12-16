@@ -11,17 +11,18 @@ license = "MIT OR Apache-2.0"
 keywords = ["http", "reader", "buffer"]
 
 [features]
-default = ["reqwest-async", "reqwest-sync"]
+default = ["reqwest-async", "reqwest-sync", "default-tls"]
 reqwest-async = ["reqwest"]
 reqwest-sync = ["reqwest/blocking"]
 ureq-sync = ["ureq"]
+default-tls = ["reqwest?/default-tls"]
 
 [dependencies]
 async-trait = "0.1.51"
 byteorder = "1.4.2"
 bytes = "1.0.1"
 read-logger = "0.2.0"
-reqwest = { version = "0.12.5", default-features = false, features = ["default-tls"], optional = true }
+reqwest = { version = "0.12.5", default-features = false, optional = true }
 thiserror = "1.0"
 ureq = { version = "2.7.1", optional = true }
 
