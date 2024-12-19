@@ -1,3 +1,7 @@
+## 0.9.0 (2024-12-19)
+
+* Put `default-tls` into its own feature flag (#9)
+
 ## 0.8.0 (2024-08-12)
 
 * Update reqwest to 0.12
