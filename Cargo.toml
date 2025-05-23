@@ -16,6 +16,7 @@ reqwest-async = ["reqwest"]
 reqwest-sync = ["reqwest/blocking"]
 ureq-sync = ["ureq"]
 default-tls = ["reqwest?/default-tls"]
+rustls-tls = ["reqwest?/rustls-tls"]
 
 [dependencies]
 async-trait = "0.1.51"
