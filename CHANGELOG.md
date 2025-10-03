@@ -1,3 +1,7 @@
+## 0.9.1 (2025-10-13)
+
+* Add `rustls` feature (#12)
+
 ## 0.9.0 (2024-12-19)
 
 * Put `default-tls` into its own feature flag (#9)
